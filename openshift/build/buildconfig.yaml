@@ -6,7 +6,7 @@ metadata:
   annotations:
     description: "Kywa build configuration template."
     iconClass: "icon-python"
-    tags: "python,flask,api"
+    tags: "html"
 objects:
   - kind: "Secret"
     apiVersion: "v1"
