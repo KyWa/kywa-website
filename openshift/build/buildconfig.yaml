@@ -1,0 +1,61 @@
+---
+kind: "Template"
+apiVersion: "v1"
+metadata:
+  name: "kywa-build"
+  annotations:
+    description: "Kywa build configuration template."
+    iconClass: "icon-python"
+    tags: "python,flask,api"
+objects:
+  - kind: "Secret"
+    apiVersion: "v1"
+    metadata:
+      name: "${SOURCE_REPO_SECRET}"
+      namespace: "${NAMESPACE}"
+    type: "kubernetes.io/ssh-auth"
+    data:
+      ssh-privatekey: "${SSH_PRIVATE_KEY}"
+  - kind: "ImageStream"
+    apiVersion: "v1"
+    metadata:
+      name: "kywa-${SOURCE_REPO_REF}"
+      namespace: "${NAMESPACE}"
+  - kind: "BuildConfig"
+    apiVersion: "v1"
+    metadata:
+      name: "kywa-${SOURCE_REPO_REF}"
+    spec:
+      output:
+        to:
+          kind: "ImageStreamTag"
+          name: "kywa-${SOURCE_REPO_REF}:latest"
+      source:
+        git:
+          uri: "${SOURCE_REPO_URI}"
+          ref: "${SOURCE_REPO_REF}"
+        sourceSecret:
+          name: "${SOURCE_REPO_SECRET}"
+            #        contextDir: "kywa"
+      strategy:
+        dockerStrategy:
+          dockerfilePath: "${DOCKERFILE_PATH}"
+parameters:
+  - name: SOURCE_REPO_URI
+    description: "Git source repository uri to clone from."
+    required: true
+  - name: SOURCE_REPO_REF
+    description: "Git branch or commit reference to clone"
+    required: true
+  - name: SOURCE_REPO_SECRET
+    description: "Git source secret to use for cloning repository."
+    required: true
+  - name: DOCKERFILE_PATH
+    description: "Path to Dockerfile to build project."
+    required: true
+  - name: NAMESPACE
+    description: "Cluster namespace to apply secret to."
+    required: true
+  - name: SSH_PRIVATE_KEY
+    description: "SSH private key to use for cloning."
+    required: true

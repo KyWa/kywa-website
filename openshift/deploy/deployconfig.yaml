@@ -1,0 +1,175 @@
+---
+kind: "Template"
+apiVersion: "v1"
+metadata:
+  name: "kywa-deployment"
+  annotations:
+objects:
+  - kind: "DeploymentConfig"
+    apiVersion: "v1"
+    metadata:
+      name: "kywa"
+      labels:
+        kywa: "${SOURCE_REPO_REF}"
+      namespace: "${NAMESPACE}"
+      annotations:
+    spec:
+      replicas: 1
+      strategy:
+        type: "Rolling"
+      template:
+        metadata:
+          labels:
+            kywa: "${SOURCE_REPO_REF}"
+        spec:
+          containers:
+            - name: "kywa"
+              image: "${IMAGE_REGISTRY}:5000/${NAMESPACE}/kywa-${SOURCE_REPO_REF}:latest"
+              imagePullPolicy: "IfNotPresent"
+              readinessProbe:
+                tcpSocket:
+                  port: 8080
+                initialDelaySeconds: 5
+                periodSeconds: 10
+              livenessProbe:
+                tcpSocket:
+                  port: 8080
+                initialDelaySeconds: 15
+                periodSeconds: 20
+              ports:
+                - containerPort: 8080
+                  protocol: "TCP"
+              resources:
+                limits:
+                  cpu: "500m"
+                  memory: "256Mi"
+                requests:
+                  cpu: "500m"
+                  memory: "256Mi"
+              securityContext:
+                priviledged: "false"
+              volumeMounts:
+              - mountPath: /etc/nginx/nginx.conf
+                subPath: nginx.conf
+                name: nginxconf
+                readOnly: true
+          restartPolicy: "Always"
+          securityContext: {}
+          serviceAccountName: "${SERVICE_ACCOUNT}"
+          volumes:
+          - configMap:
+              defaultMode: 420
+              name: nginx-conf
+            name: nginxconf
+      trigers:
+        - type: "ImageChange"
+  - kind: "Service"
+    apiVersion: "v1"
+    metadata:
+      name: "${SERVICE_NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      ports:
+        - name: "http"
+          protocol: "TCP"
+          port: 80
+          targetPort: 8080
+      selector:
+        kywa: "${SOURCE_REPO_REF}"
+  - kind: "Route"
+    apiVersion: route.openshift.io/v1
+    metadata:
+      name: "${SERVICE_NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      port:
+        targetPort: http
+      tls:
+        termination: edge
+      to:
+        kind: Service
+        name: "${SERVICE_NAME}"
+        weight: 100
+        wildcardPolicy: None
+  - kind: "ConfigMap"
+    apiVersion: "v1"
+    metadata:
+      name: "nginx-conf"
+      namespace: "${NAMESPACE}"
+    data:
+      nginx.conf: |
+        #user nginx;
+        worker_processes auto;
+        error_log /var/log/nginx/error.log;
+        pid /var/run/nginx.pid;
+        
+        # Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+        include /usr/share/nginx/modules/*.conf;
+        
+        events {
+            worker_connections 1024;
+        }
+        
+        http {
+            log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                              '$status $body_bytes_sent "$http_referer" '
+                              '"$http_user_agent" "$http_x_forwarded_for"';
+        
+            access_log  /var/log/nginx/access.log  main;
+        
+            sendfile            on;
+            tcp_nopush          on;
+            tcp_nodelay         on;
+            keepalive_timeout   65;
+            types_hash_max_size 2048;
+        
+            include             /etc/nginx/mime.types;
+            default_type        application/octet-stream;
+        
+            # Load modular configuration files from the /etc/nginx/conf.d directory.
+            # See http://nginx.org/en/docs/ngx_core_module.html#include
+            # for more information.
+            include /etc/nginx/conf.d/*.conf;
+        
+            server {
+                listen       8080 default_server;
+                server_name  _;
+                root         /usr/share/nginx/html;
+        
+                # Load configuration files for the default server block.
+                include /etc/nginx/default.d/*.conf;
+        
+                location / {
+                }
+            }
+        }
+  - kind: "ServiceAccount"
+    apiVersion: "v1"
+    metadata:
+      name: "${SERVICE_ACCOUNT}"
+      namespace: "${NAMESPACE}"
+  - kind: "ClusterRoleBinding"
+    apiVersion: "v1"
+    metadata:
+      name: "kywa-sudoer"
+      namespace: "${NAMESPACE}"
+    roleRef:
+      name: "sudoer"
+    userNames:
+      - "system:serviceaccount:${NAMESPACE}:${SERVICE_ACCOUNT}"
+parameters:
+  - name: IMAGE_REGISTRY
+    description: "Git source repository uri to clone from."
+    required: true
+  - name: SOURCE_REPO_REF
+    description: "Git branch or commit reference to clone"
+    required: true
+  - name: NAMESPACE
+    description: "Cluster namespace to apply image stream to."
+    required: true
+  - name: SERVICE_ACCOUNT
+    description: "Service Account to run Koncierge as."
+    required: true
+  - name: SERVICE_NAME
+    description: "Cluster namespace to apply secret to."
+    required: true
