@@ -5,3 +5,4 @@ RUN git clone https://github.com/KyWa/kywa-website.git /tmp/kywa-web && rm /tmp/
 FROM docker.io/httpd:latest
 
 COPY --from=clone /tmp/kywa-web /usr/local/apache2/htdocs/
+COPY --from=clone /tmp/kywa-web /var/www/html
