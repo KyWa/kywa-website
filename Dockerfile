@@ -1,8 +1,6 @@
-FROM docker.io/bitnami/git:latest AS clone
-
-RUN git clone https://github.com/KyWa/kywa-website.git /tmp/kywa-web && rm /tmp/kywa-web/Dockerfile*
-
-FROM docker.io/httpd:latest
-
-COPY --from=clone /tmp/kywa-web /usr/local/apache2/htdocs/
-COPY --from=clone /tmp/kywa-web /var/www/html
+FROM registry.access.redhat.com/ubi8/ubi:latest
+RUN yum install -y nginx
+RUN chmod g+rwx /var/run /var/log/nginx
+COPY . /usr/share/nginx/html
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]
